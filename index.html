@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AutoChatbot - Assistant Automobile IA</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231a3a8f'/><rect x='16' y='55' width='68' height='20' rx='8' fill='white'/><path d='M30 55 Q34 38 44 34 L56 34 Q66 38 70 55Z' fill='white'/><circle cx='30' cy='75' r='9' fill='%23a8edea'/><circle cx='70' cy='75' r='9' fill='%23a8edea'/><rect x='54' y='12' width='30' height='20' rx='6' fill='%233b9ef5'/><circle cx='62' cy='22' r='2.5' fill='white'/><circle cx='69' cy='22' r='2.5' fill='white'/><circle cx='76' cy='22' r='2.5' fill='white'/></svg>" type="image/svg+xml">
+    <link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -674,9 +676,7 @@
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">🕘 Historique</div>
         <button class="sidebar-facture-btn" onclick="openFacture()">📄 Nouvelle Facture</button>
-        <div class="history-list" id="historyList">
-            <div class="sidebar-empty" id="historyEmpty">Aucune conversation</div>
-        </div>
+        <div class="history-list" id="historyList"></div>
     </div>
 
     <!-- CHAT PRINCIPAL -->
@@ -759,7 +759,15 @@
 </div>
 
 <script>
-    const API_URL = 'http://localhost:8000/api/chat';
+    const API_BASE = (() => {
+        // في بيئة Railway أو أي production: استخدم نفس الـ origin
+        // في التطوير المحلي: localhost:8000
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            return 'http://localhost:8000';
+        }
+        return window.location.origin;
+    })();
+    const API_URL = API_BASE + '/api/chat';
     const sessionId = 'web-' + Date.now();
     let isFirstMessage = true;
     let pendingImage = null;
@@ -796,22 +804,17 @@
     }
 
     // ===== HISTORIQUE =====
-    function saveHistory() {
-        localStorage.setItem('autochat_history', JSON.stringify(conversations));
-        renderHistory();
-    }
-
     function renderHistory() {
         const list = document.getElementById('historyList');
-        const empty = document.getElementById('historyEmpty');
+        if (!list) return;
+        list.innerHTML = '';
         if (conversations.length === 0) {
-            empty.style.display = 'block';
-            list.innerHTML = '';
+            const empty = document.createElement('div');
+            empty.className = 'sidebar-empty';
+            empty.textContent = 'Aucune conversation';
             list.appendChild(empty);
             return;
         }
-        empty.style.display = 'none';
-        list.innerHTML = '';
         [...conversations].reverse().forEach(conv => {
             const item = document.createElement('div');
             item.className = 'history-item' + (conv.id === currentConvId ? ' active' : '');
@@ -819,6 +822,11 @@
             item.onclick = () => loadConv(conv.id);
             list.appendChild(item);
         });
+    }
+
+    function saveHistory() {
+        localStorage.setItem('autochat_history', JSON.stringify(conversations));
+        renderHistory();
     }
 
     function deleteConv(e, id) {
@@ -886,7 +894,7 @@
 
     function addMessage(text, isUser, imageUrl) {
         const welcome = document.getElementById('welcomeMessage');
-        if (welcome) welcome.style.display = 'none';
+        if (welcome) welcome.remove();
         isFirstMessage = false;
 
         const time = formatTime(new Date());
@@ -906,7 +914,7 @@
 
     function createTypingBubble() {
         const welcome = document.getElementById('welcomeMessage');
-        if (welcome) welcome.style.display = 'none';
+        if (welcome) welcome.remove();
         const container = document.getElementById('chatMessages');
         const div = document.createElement('div');
         div.className = 'message bot';
@@ -1027,7 +1035,13 @@
         } catch (error) {
             removeTypingIndicator();
             console.error(error);
-            addMessage('Erreur de connexion. Vérifie que le backend tourne sur le port 8000.', false);
+            const isOffline = error.message && error.message.includes('fetch');
+            addMessage(
+                isOffline
+                    ? '⚠️ Impossible de joindre le serveur. Vérifie que le backend est bien démarré.'
+                    : '⚠️ Erreur: ' + error.message,
+                false
+            );
         } finally {
             input.disabled = false;
             sendButton.disabled = false;
@@ -1043,7 +1057,10 @@
     }
 
     function useExample(element) {
-        document.getElementById('chatInput').value = element.textContent.replace(/^[^\w\u0600-\u06FF]+/, '').trim();
+        // إزالة الـ emoji والرموز من بداية النص
+        const raw = element.textContent || element.innerText;
+        const clean = raw.replace(/^[\s\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}🔧💰🏪🔩]+/u, '').trim();
+        document.getElementById('chatInput').value = clean;
         sendMessage();
     }
 
