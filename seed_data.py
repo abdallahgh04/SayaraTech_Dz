@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from database import engine, Base, SessionLocal
 import models
+import sys
 
 Base.metadata.create_all(bind=engine)
 
@@ -262,4 +263,8 @@ def seed_database():
         db.close()
 
 if __name__ == "__main__":
-    seed_database()
+    try:
+        seed_database()
+    except Exception as e:
+        print(f"❌ Erreur fatale seed: {e}")
+        sys.exit(1)
